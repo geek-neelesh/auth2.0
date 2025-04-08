@@ -13,7 +13,7 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: true }, // Only transmit cookies over HTTPS
+    cookie: { secure:  process.env.NODE_ENV === 'production' }, // Only transmit cookies over HTTPS
   })
 );
 
@@ -68,7 +68,18 @@ passport.use(
 
 // Serialize user information into the session
 passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser((obj, done) => done(null, obj));
+passport.deserializeUser(async(id, done) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [id]);
+    if (rows.length > 0) {
+      done(null, rows[0]); // Full user object goes to req.user
+    } else {
+      done(null, false); // User not found
+    }
+  } catch (err) {
+    done(err);
+  }
+});
 
 // Define routes
 app.get('/', (req, res) => {
@@ -86,7 +97,8 @@ app.get(
   '/oAuth/callback',
   passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => {
-    res.send(`<h1>Login successful</h1><p>Welcome, ${req.user.displayName}</p><h3><a href="/logout">logout</a><h3>`);
+    // console.log(req._passport);
+    res.send(`<h1>Login successful</h1><p>Welcome, ${req.user.display_name}</p><h3><a href="/logout">logout</a><h3>`);
   }
 );
 
